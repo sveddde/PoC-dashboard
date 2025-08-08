@@ -1,0 +1,12 @@
+[
+  {"name": "Göteborg", "lat": 57.7089, "lon": 11.9746},
+  {"name": "Borås", "lat": 57.7210, "lon": 12.9401},
+  {"name": "Trollhättan", "lat": 58.2825, "lon": 12.2886},
+  {"name": "Uddevalla", "lat": 58.3478, "lon": 11.9424},
+  {"name": "Skövde", "lat": 58.3903, "lon": 13.8460},
+  {"name": "Mariestad", "lat": 58.7109, "lon": 13.8236},
+  {"name": "Falköping", "lat": 58.1734, "lon": 13.5506},
+  {"name": "Åmål", "lat": 59.0515, "lon": 12.7032},
+  {"name": "Strömstad", "lat": 58.9394, "lon": 11.1706},
+  {"name": "Kinna", "lat": 57.5075, "lon": 12.6953}
+]
