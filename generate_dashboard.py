@@ -3,12 +3,20 @@ import plotly.graph_objs as go
 from plotly.offline import plot
 
 def get_smhi_data():
-    url = "https://opendata-download-metobs.smhi.se/api/version/latest/parameter/5/station/98210/period/latest-months/data.json"
+    url = "https://opendata-download-metobs.smhi.se/api/version/latest/parameter/1/station/98210/period/latest-months/data.json"
     r = requests.get(url)
-    data = r.json()
-    values = [float(v["value"]) for v in data["value"] if v["value"] not in [None, "NaN"]]
-    dates = [v["date"][:10] for v in data["value"] if v["value"] not in [None, "NaN"]]
-    return dates, values
+
+    print("Statuskod:", r.status_code)
+    print("Svarstext:", r.text[:300])  # Begränsar till 300 tecken för översikt
+
+    # Försök parsa JSON om det verkar OK
+    try:
+        data = r.json()
+    except Exception as e:
+        print("Kunde inte tolka JSON:", e)
+        return [], []
+
+    # ... fortsätt bearbeta datan ...
 
 def get_sgu_data():
     url = "https://resource.sgu.se/api/grundvatten/observation/20250/latest"
