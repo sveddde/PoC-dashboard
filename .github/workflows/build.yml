@@ -1,33 +1,38 @@
-name: Generate and deploy dashboard
+name: Generate dashboard
 
 on:
+  workflow_dispatch:
   schedule:
-    - cron: '0 1 * * *'  # Kör varje natt kl 01:00 UTC
-  workflow_dispatch:      # Möjlighet att köra manuellt
+    - cron: '0 3 * * *'  # Kör varje natt kl 03:00 svensk tid
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Check out repo
-      uses: actions/checkout@v3
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.11'
+        python-version: 3.11
 
     - name: Install dependencies
-      run: |
-        pip install -r requirements.txt
+      run: pip install requests
 
-    - name: Generate dashboard
+    - name: Run script
       run: python generate_dashboard.py
 
-    - name: Commit & push if changed
+    - name: Copy dashboard.html to docs/
       run: |
-        git config user.name "github-actions[bot]"
-        git config user.email "github-actions[bot]@users.noreply.github.com"
-        git add docs/index.html
-        git commit -m "Update dashboard" || echo "No changes to commit"
+        mkdir -p docs
+        cp dashboard.html docs/dashboard.html
+
+    - name: Commit and push changes
+      run: |
+        git config --global user.name "github-actions"
+        git config --global user.email "github-actions@github.com"
+        git add docs/dashboard.html
+        git commit -m "Update dashboard [auto]" || echo "No changes to commit"
         git push
