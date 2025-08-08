@@ -1,56 +1,124 @@
 import requests
-import plotly.graph_objs as go
-from plotly.offline import plot
+import json
+from datetime import datetime
+from pathlib import Path
 
-def get_smhi_data():
-    url = "https://opendata-download-metobs.smhi.se/api/version/latest/parameter/1/station/98210/period/latest-months/data.json"
+# === Inställningar ===
+COORDS_FILE = "coordinates.json"
+OUTPUT_FILE = "dashboard.html"
+ALERTS_URL = "https://opendata.smhi.se/triangulering/alerts.json"
+
+# === Hjälpfunktioner ===
+
+def fetch_forecast(lat, lon):
+    url = f"https://opendata.smhi.se/metfcst/pmp/json/1.0/?lat={lat}&lon={lon}"
     r = requests.get(url)
+    if r.status_code != 200:
+        return None
+    return r.json()
 
-    print("Statuskod:", r.status_code)
-    print("Svarstext:", r.text[:300])  # Begränsar till 300 tecken för översikt
+def get_alerts():
+    r = requests.get(ALERTS_URL)
+    if r.status_code != 200:
+        return []
+    return r.json()
 
-    # Försök parsa JSON om det verkar OK
+def extract_weather_data(forecast):
     try:
-        data = r.json()
-    except Exception as e:
-        print("Kunde inte tolka JSON:", e)
-        return [], []
+        t_series = forecast["timeSeries"]
+        first = t_series[0]["parameters"]
+        data = {p["name"]: p["values"][0] for p in first}
+        return {
+            "temperature": data.get("t"),
+            "precipitation": data.get("pmean"),
+            "soilMoisture": data.get("sfcsoilmoisture", "–")
+        }
+    except Exception:
+        return {"temperature": "–", "precipitation": "–", "soilMoisture": "–"}
 
-    # ... fortsätt bearbeta datan ...
+def match_alerts_to_locations(alerts, coordinates):
+    matched = []
+    for alert in alerts:
+        for area in alert.get("info", [{}])[0].get("area", []):
+            for coord in coordinates:
+                if coord["name"].lower() in area.get("areaDesc", "").lower():
+                    matched.append((coord["name"], alert["info"][0]["event"]))
+    return matched
 
-def get_sgu_data():
-    url = "https://resource.sgu.se/api/grundvatten/observation/20250/latest"
-    r = requests.get(url)
-    data = r.json()
-    obs = data["observations"][0]
-    return obs["datetime"][:10], obs["value"]
+# === Huvudlogik ===
 
-def generate_html(dates, rainfall, gw_date, gw_level):
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=dates, y=rainfall, mode='lines+markers', name='Nederbörd (mm)'))
-    fig.update_layout(title='Nederbörd i Göteborg (senaste månaden)', xaxis_title='Datum', yaxis_title='mm')
+with open(COORDS_FILE, encoding="utf-8") as f:
+    coordinates = json.load(f)
 
-    html_text = f"""
-    <h2>Grundvattennivå (SGU)</h2>
-    <p>Datum: {gw_date}</p>
-    <p>Nivå: {gw_level} meter över havet</p>
-    <hr>
-    """
-    html_graph = plot(fig, output_type='div', include_plotlyjs='cdn')
-    full_html = f"""
-    <html>
-    <head><title>Vatten Dashboard</title></head>
-    <body>
-    <h1>Vatten Dashboard</h1>
-    {html_text}
-    {html_graph}
-    </body>
-    </html>
-    """
-    with open("docs/index.html", "w", encoding="utf-8") as f:
-        f.write(full_html)
+weather_data = []
+for coord in coordinates:
+    forecast = fetch_forecast(coord["lat"], coord["lon"])
+    if forecast:
+        data = extract_weather_data(forecast)
+        weather_data.append({
+            "name": coord["name"],
+            "temperature": data["temperature"],
+            "precipitation": data["precipitation"],
+            "soilMoisture": data["soilMoisture"]
+        })
+    else:
+        weather_data.append({
+            "name": coord["name"],
+            "temperature": "–",
+            "precipitation": "–",
+            "soilMoisture": "–"
+        })
 
-if __name__ == "__main__":
-    dates, rainfall = get_smhi_data()
-    gw_date, gw_level = get_sgu_data()
-    generate_html(dates, rainfall, gw_date, gw_level)
+alerts_raw = get_alerts()
+matched_alerts = match_alerts_to_locations(alerts_raw, coordinates)
+
+# === Generera HTML ===
+
+html = f"""<!DOCTYPE html>
+<html lang="sv">
+<head>
+    <meta charset="UTF-8">
+    <title>Västra Götalands väderdashboard</title>
+    <style>
+        body {{ font-family: sans-serif; }}
+        table {{ border-collapse: collapse; width: 100%; margin-bottom: 2em; }}
+        th, td {{ border: 1px solid #ccc; padding: 8px; text-align: center; }}
+        th {{ background-color: #f0f0f0; }}
+        .warning {{ background-color: #ffdddd; }}
+    </style>
+</head>
+<body>
+    <h1>Väderdata för Västra Götaland</h1>
+    <p>Senast uppdaterad: {datetime.now().strftime('%Y-%m-%d %H:%M')}</p>
+
+    <table>
+        <tr>
+            <th>Plats</th>
+            <th>Temperatur (°C)</th>
+            <th>Nederbörd (mm)</th>
+            <th>Markfuktighet</th>
+        </tr>
+"""
+
+for row in weather_data:
+    html += f"""<tr>
+        <td>{row['name']}</td>
+        <td>{row['temperature']}</td>
+        <td>{row['precipitation']}</td>
+        <td>{row['soilMoisture']}</td>
+    </tr>
+"""
+
+html += "</table>\n"
+
+if matched_alerts:
+    html += "<h2>Aktuella varningar</h2>\n<table>\n<tr><th>Plats</th><th>Typ av varning</th></tr>\n"
+    for loc, warning in matched_alerts:
+        html += f"<tr class='warning'><td>{loc}</td><td>{warning}</td></tr>\n"
+    html += "</table>\n"
+else:
+    html += "<p>Inga varningar just nu.</p>\n"
+
+html += "</body></html>"
+
+Path(OUTPUT_FILE).write_text(html, encoding="utf-8")
