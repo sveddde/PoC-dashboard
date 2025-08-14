@@ -3,7 +3,7 @@ name: Generate dashboard
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'  # Kör varje natt kl 03:00 svensk tid
+    #- cron: '0 3 * * *'  # Kör varje natt kl 03:00 svensk tid
 
 jobs:
   build:
